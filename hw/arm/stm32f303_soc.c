@@ -45,6 +45,7 @@ static const uint32_t adc_addr[] = { 0x40012000, 0x40012100, 0x40012200,
 static const uint32_t spi_addr[] =   { 0x40013000, 0x40003800, 0x40003C00,
                                        0x40013400, 0x40015000, 0x40015400 };
 #define EXTI_ADDR                      0x40013C00
+#define RCC_ADDR                      0x40021000
 /* GPIOA,B,C,D and F (no GPIOE) */
 static const uint32_t gpio_addr[] =  { 0x48000000, 0x48000400,0x48000800,0x48000C00,0x48001400};
 
@@ -89,6 +90,7 @@ static void stm32f303_soc_initfn(Object *obj)
     }
 
     object_initialize_child(obj, "exti", &s->exti, TYPE_STM32F4XX_EXTI);
+    object_initialize_child(obj, "rcc", &s->rcc, TYPE_STM32F3XX_RCC);
 }
 
 static void stm32f303_soc_realize(DeviceState *dev_soc, Error **errp)
@@ -244,6 +246,16 @@ static void stm32f303_soc_realize(DeviceState *dev_soc, Error **errp)
         qdev_connect_gpio_out(DEVICE(&s->syscfg), i, qdev_get_gpio_in(dev, i));
     }
 
+    /* RCC device */
+    dev = DEVICE(&s->rcc);
+    sysbus_realize(SYS_BUS_DEVICE(&s->rcc), &err);
+    if (err != NULL) {
+        error_propagate(errp, err);
+        return;
+    }
+    busdev = SYS_BUS_DEVICE(dev);
+    sysbus_mmio_map(busdev, 0, RCC_ADDR);
+
     create_unimplemented_device("timer[12]",   0x40001800, 0x400);
     create_unimplemented_device("timer[13]",   0x40001C00, 0x400);
     create_unimplemented_device("timer[14]",   0x40002000, 0x400);
@@ -266,7 +278,6 @@ static void stm32f303_soc_realize(DeviceState *dev_soc, Error **errp)
     create_unimplemented_device("timer[10]",   0x40014400, 0x400);
     create_unimplemented_device("timer[11]",   0x40014800, 0x400);
     create_unimplemented_device("CRC",         0x40023000, 0x400);
-    create_unimplemented_device("RCC",         0x40021000, 0x400); //updated
     create_unimplemented_device("FLASH",       0x40022000, 0x30);  //updated
     create_unimplemented_device("Flash Int",   0x40023C00, 0x400);
     create_unimplemented_device("BKPSRAM",     0x40024000, 0x400);

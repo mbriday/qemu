@@ -33,6 +33,7 @@
 #include "hw/adc/stm32f2xx_adc.h"
 #include "hw/misc/stm32f4xx_exti.h"
 #include "hw/gpio/stm32f3xx_gpio.h"
+#include "hw/misc/stm32f3xx_rcc.h"
 #include "hw/or-irq.h"
 #include "hw/ssi/stm32f2xx_spi.h"
 #include "hw/arm/armv7m.h"
@@ -69,6 +70,7 @@ typedef struct STM32F303State {
     STM32F2XXADCState adc[STM_NUM_ADCS];
     STM32F2XXSPIState spi[STM_NUM_SPIS];
     STM32F3XXGPIOState gpio[STM_NUM_GPIOS];
+    STM32F3XXRCCState rcc;
 
     MemoryRegion sram;
     MemoryRegion flash;
