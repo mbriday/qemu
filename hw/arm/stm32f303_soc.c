@@ -74,7 +74,7 @@ static void stm32f303_soc_initfn(Object *obj)
 
     for (i = 0; i < STM_NUM_TIMERS; i++) {
         object_initialize_child(obj, "timer[*]", &s->timer[i],
-                                TYPE_STM32F2XX_TIMER);
+                                TYPE_STM32F3XX_TIMER);
     }
 
     for (i = 0; i < STM_NUM_ADCS; i++) {

@@ -28,7 +28,7 @@
 #define HW_ARM_STM32F303_SOC_H
 
 #include "hw/misc/stm32f4xx_syscfg.h"
-#include "hw/timer/stm32f2xx_timer.h"
+#include "hw/timer/stm32f3xx_timer.h"
 #include "hw/char/stm32f2xx_usart.h"
 #include "hw/adc/stm32f2xx_adc.h"
 #include "hw/misc/stm32f4xx_exti.h"
@@ -65,7 +65,7 @@ typedef struct STM32F303State {
     STM32F4xxSyscfgState syscfg;
     STM32F4xxExtiState exti;
     STM32F2XXUsartState usart[STM_NUM_USARTS];
-    STM32F2XXTimerState timer[STM_NUM_TIMERS];
+    STM32F3XXTimerState timer[STM_NUM_TIMERS];
     qemu_or_irq adc_irqs;
     STM32F2XXADCState adc[STM_NUM_ADCS];
     STM32F2XXSPIState spi[STM_NUM_SPIS];
