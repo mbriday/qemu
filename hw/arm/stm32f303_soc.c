@@ -228,6 +228,7 @@ static void stm32f303_soc_realize(DeviceState *dev_soc, Error **errp)
         }
         busdev = SYS_BUS_DEVICE(dev);
         sysbus_mmio_map(busdev, 0, gpio_addr[i]);
+		s->gpio[i].id = i;
     }
 
     /* EXTI device */

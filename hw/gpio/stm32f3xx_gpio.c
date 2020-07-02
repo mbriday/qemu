@@ -26,6 +26,7 @@
 #include "migration/vmstate.h"
 #include "qemu/log.h"
 #include "qemu/module.h"
+#include "qemu/main-loop.h"
 
 
 #ifndef DEBUG_STM32F3XX_GPIO
@@ -131,14 +132,7 @@ static void stm32f3xx_gpio_ODR_write(STM32F3XXGPIOState *s, uint32_t new_value)
     changed_out = changed & s->dir_mask;
 
     if (changed_out) {
-        for (int pin = 0; pin < STM32F3XX_GPIO_PIN_COUNT; pin++) {
-            /* If the value of this pin has changed, then update
-             * the output IRQ.
-             */
-            if (changed_out & BIT(pin)) {
-				qemu_set_irq(s->out_irq[pin], (s->GPIOx_ODR & BIT(pin)) ? 1 : 0);
-            }
-        }
+		qemu_set_irq(s->out_irq, changed_out);
     }
 }
 
@@ -248,7 +242,6 @@ static Property stm32f3xx_gpio_properties[] = {
 
 static void stm32f3xx_gpio_reset(DeviceState *dev)
 {
-    int pin;
     STM32F3XXGPIOState *s = STM32F3XX_GPIO(dev);
 
     s->GPIOx_MODER = 0x0;
@@ -259,25 +252,27 @@ static void stm32f3xx_gpio_reset(DeviceState *dev)
 
     s->dir_mask = 0; /* input = 0, output = 1 */
 
-    for(pin = 0; pin < STM32F3XX_GPIO_PIN_COUNT; pin++) {
-        qemu_irq_lower(s->out_irq[pin]);
-    }
+    //qemu_irq_lower(s->out_irq);
 }
 
 static void stm32f3xx_gpio_realize(DeviceState *dev, Error **errp)
 {
     STM32F3XXGPIOState *s = STM32F3XX_GPIO(dev);
+	SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
 
     memory_region_init_io(&s->iomem, OBJECT(s), &stm32f3xx_gpio_ops, s,
                           TYPE_STM32F3XX_GPIO, STM32F3XX_GPIO_MEM_SIZE);
 
     qdev_init_gpio_in(DEVICE(s), stm32f3xx_gpio_in_trigger, STM32F3XX_GPIO_PIN_COUNT);
-    qdev_init_gpio_out(DEVICE(s), s->out_irq, STM32F3XX_GPIO_PIN_COUNT); 
+    //qdev_init_gpio_out(DEVICE(s), s->out_irq, STM32F3XX_GPIO_PIN_COUNT); 
+    qdev_init_gpio_out(DEVICE(s), &(s->out_irq), 1); 
 
     for(int pin = 0; pin < STM32F3XX_GPIO_PIN_COUNT; pin++) {
-        sysbus_init_irq(SYS_BUS_DEVICE(dev), &s->in_irq[pin]);
+        sysbus_init_irq(sbd, &s->in_irq[pin]);
     }
-    sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
+    sysbus_init_mmio(sbd, &s->iomem);
+
+
 }
 
 static void stm32f3xx_gpio_class_init(ObjectClass *klass, void *data)

@@ -25,6 +25,7 @@
 #define STM32F3XX_GPIO_H
 
 #include "hw/sysbus.h"
+#include <mqueue.h>
 
 #define TYPE_STM32F3XX_GPIO "stm32f3xx.gpio"
 #define STM32F3XX_GPIO(obj) OBJECT_CHECK(STM32F3XXGPIOState, (obj),TYPE_STM32F3XX_GPIO)
@@ -65,9 +66,12 @@ typedef struct STM32F3XXGPIOState {
     uint16_t dir_mask; /* input = 0, output = 1 */ 
 	
 	/* IRQ for external usage - output */
-    qemu_irq out_irq[STM32F3XX_GPIO_PIN_COUNT];
+    qemu_irq out_irq;
 	/* IRQ for internal usage => other STM32 peripherals */
     qemu_irq in_irq[STM32F3XX_GPIO_PIN_COUNT];
+	/* GPIO id: 0 is GPIOA, 1i is GPIOB, .. */
+	int id;
+
 } STM32F3XXGPIOState;
 
 #endif /* STM32F3XX_GPIO_H */
