@@ -45,23 +45,24 @@ static void stm32f4xx_exti_set_irq(void *opaque, int irq, int level)
 {
     STM32F4xxExtiState *s = opaque;
 
+    if (!((1 << irq) & s->exti_imr)) {
+        /* Interrupt is masked */
+        return;
+    }
+
     trace_stm32f4xx_exti_set_irq(irq, level);
 
     if (((1 << irq) & s->exti_rtsr) && level) {
         /* Rising Edge */
+        qemu_irq_pulse(s->irq[irq]);
         s->exti_pr |= 1 << irq;
     }
 
     if (((1 << irq) & s->exti_ftsr) && !level) {
         /* Falling Edge */
+        qemu_irq_pulse(s->irq[irq]);
         s->exti_pr |= 1 << irq;
     }
-
-    if (!((1 << irq) & s->exti_imr)) {
-        /* Interrupt is masked */
-        return;
-    }
-    qemu_irq_pulse(s->irq[irq]);
 }
 
 static uint64_t stm32f4xx_exti_read(void *opaque, hwaddr addr,

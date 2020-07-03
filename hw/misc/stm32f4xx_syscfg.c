@@ -45,7 +45,7 @@ static void stm32f4xx_syscfg_reset(DeviceState *dev)
 static void stm32f4xx_syscfg_set_irq(void *opaque, int irq, int level)
 {
     STM32F4xxSyscfgState *s = opaque;
-    int icrreg = irq / 4;
+    int icrreg = (irq & 0xF) / 4;
     int startbit = (irq & 3) * 4;
     uint8_t config = irq / 16;
 
@@ -54,7 +54,7 @@ static void stm32f4xx_syscfg_set_irq(void *opaque, int irq, int level)
     g_assert(icrreg < SYSCFG_NUM_EXTICR);
 
     if (extract32(s->syscfg_exticr[icrreg], startbit, 4) == config) {
-        qemu_set_irq(s->gpio_out[irq], level);
+        qemu_set_irq(s->gpio_out[irq & 0xF], level);
         trace_stm32f4xx_pulse_exti(irq);
    }
 }
@@ -89,6 +89,7 @@ static void stm32f4xx_syscfg_write(void *opaque, hwaddr addr,
     uint32_t value = val64;
 
     trace_stm32f4xx_syscfg_write(value, addr);
+
 
     switch (addr) {
     case SYSCFG_MEMRMP:

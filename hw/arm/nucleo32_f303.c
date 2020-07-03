@@ -57,9 +57,11 @@ typedef struct {
 	  uint32_t gpio;	/* 0 GPIOA, 1 GPIOB, … */
 } gpio_in_msg;
 
-/* this handler is called if at least one pin is updated 
- * changed_out is a mask of pins in output mode that toggled
- * see GPIOx_ODR to get the new values.
+/* this handler is called:
+ * * if at least one pin is updated changed_out is a mask of pins in 
+ * output mode that toggled see GPIOx_ODR to get the new values.
+ * * if the dir_mask is updated
+ * * at startup
  **/
 static void gpio_out_update_handler(void *opaque, int n, int changed_out) {
 	STM32F3XXGPIOState *gpio= (STM32F3XXGPIOState *)opaque;
@@ -107,6 +109,9 @@ static void* remote_gpio_thread(void * arg)
 			//printf("received IRQ from GUI\n");
 			//printf("gpio %d, pin %d, state %d\n",mg->gpio,mg->pin, mg->state);
 			STM32F3XXGPIOState *gpio = &(dev->gpio[mg->gpio]);
+			//send IRQ to SYSCFG -> EXTI.
+			qemu_irq irq = qdev_get_gpio_in(DEVICE(&(dev->syscfg)),mg->pin+mg->gpio*16);	
+			qemu_set_irq(irq, mg->state);
 			if(mg->state) {
 				gpio->GPIOx_IDR |= 1 << mg->pin;
 			} else {

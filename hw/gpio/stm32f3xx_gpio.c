@@ -152,6 +152,7 @@ static void stm32f3xx_gpio_update_dir(STM32F3XXGPIOState *s)
 			s->dir_mask |=  (1<<pin); //output
 		}
 	}
+	qemu_set_irq(s->out_irq, 0);
 }
 
 static void stm32f3xx_gpio_write(void *opaque, hwaddr offset, uint64_t value,
@@ -252,7 +253,7 @@ static void stm32f3xx_gpio_reset(DeviceState *dev)
 
     s->dir_mask = 0; /* input = 0, output = 1 */
 
-    //qemu_irq_lower(s->out_irq);
+	qemu_set_irq(s->out_irq, 0);
 }
 
 static void stm32f3xx_gpio_realize(DeviceState *dev, Error **errp)

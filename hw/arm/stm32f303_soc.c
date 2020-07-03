@@ -32,7 +32,7 @@
 #include "hw/arm/stm32f303_soc.h"
 #include "hw/misc/unimp.h"
 
-#define SYSCFG_ADD                     0x40013800
+#define SYSCFG_ADD                     0x40010000 /*updated*/
 static const uint32_t usart_addr[] = { 0x40011000, 0x40004400, 0x40004800,
                                        0x40004C00, 0x40005000, 0x40011400,
                                        0x40007800, 0x40007C00 };
@@ -44,7 +44,7 @@ static const uint32_t adc_addr[] = { 0x40012000, 0x40012100, 0x40012200,
                                      0x40012300, 0x40012400, 0x40012500 };
 static const uint32_t spi_addr[] =   { 0x40013000, 0x40003800, 0x40003C00,
                                        0x40013400, 0x40015000, 0x40015400 };
-#define EXTI_ADDR                      0x40013C00
+#define EXTI_ADDR                      0x40010400 /*updated */
 #define RCC_ADDR                      0x40021000
 /* GPIOA,B,C,D and F (no GPIOE) */
 static const uint32_t gpio_addr[] =  { 0x48000000, 0x48000400,0x48000800,0x48000C00,0x48001400};
