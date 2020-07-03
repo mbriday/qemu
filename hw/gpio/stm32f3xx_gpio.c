@@ -131,6 +131,10 @@ static void stm32f3xx_gpio_ODR_write(STM32F3XXGPIOState *s, uint32_t new_value)
     /* Get changed pins that are outputs - we will not touch input pins */
     changed_out = changed & s->dir_mask;
 
+	/* update IDR */
+	s->GPIOx_IDR &= ~(s->dir_mask);
+	s->GPIOx_IDR |= (s->dir_mask & new_value);
+
     if (changed_out) {
 		qemu_set_irq(s->out_irq, changed_out);
     }

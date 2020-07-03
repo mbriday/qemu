@@ -37,6 +37,7 @@
 
 #define REMOTE_GPIO_MAGICK 0xDEADBEEF
 
+
 /* message queue, thread and mutex to communicate with GUI */
 mqd_t mq;
 QemuMutex dat_lock;
@@ -132,6 +133,8 @@ static void nucleo32_f303_init(MachineState *machine)
     armv7m_load_kernel(ARM_CPU(first_cpu),
                        machine->kernel_filename,
                        FLASH_SIZE);
+
+	system_clock_scale = NANOSECONDS_PER_SECOND / 6400000; //6.4 MHz
 
 	qemu_mutex_init(&dat_lock);
 	mq = mq_open("/from_qemu",O_CREAT | O_WRONLY,S_IRUSR | S_IWUSR,NULL);
