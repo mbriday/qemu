@@ -36,6 +36,7 @@
 #include "qemu/main-loop.h"
 
 #define REMOTE_GPIO_MAGICK 0xDEADBEEF
+#define REMOTE_ADC_MAGICK  0xCAFECAFE
 
 
 /* message queue, thread and mutex to communicate with GUI */
@@ -58,6 +59,12 @@ typedef struct {
 	  uint32_t gpio;	/* 0 GPIOA, 1 GPIOB, … */
 } gpio_in_msg;
 
+typedef struct {
+      uint32_t magick;
+      uint32_t id;	    /* ADC id */
+      uint32_t value;   /* 0 to 4095 */
+} adc_in_msg;
+
 /* this handler is called:
  * * if at least one pin is updated changed_out is a mask of pins in 
  * output mode that toggled see GPIOx_ODR to get the new values.
@@ -79,6 +86,8 @@ static void gpio_out_update_handler(void *opaque, int n, int changed_out) {
 	msg.gpio        = gpio->id; /* TODO update */
 	/* send new value */
 	mq_send(mq,(const char *)&msg,sizeof(msg),0);
+	printf("*");
+	fflush(stdout);
 	qemu_mutex_unlock(&dat_lock);
 }
 
@@ -89,7 +98,8 @@ static void* remote_gpio_thread(void * arg)
     //Here we receive the data from the queue 
     const int MSG_MAX = 8192;
     char buf[MSG_MAX];
-    gpio_in_msg *mg = (gpio_in_msg *)&buf;
+    gpio_in_msg *msgGpio = (gpio_in_msg *)&buf;
+    adc_in_msg  *msgAdc  = (adc_in_msg *)&buf;
     mqd_t mq = mq_open("/to_qemu",O_CREAT | O_RDONLY,S_IRUSR | S_IWUSR,NULL);
     if(mq<0) {
         perror("I can't open mq");
@@ -101,25 +111,37 @@ static void* remote_gpio_thread(void * arg)
             perror("I can't receive");
             exit(1);
         }
-        if(res != sizeof(gpio_in_msg)) continue;
-        if((int) mg->magick != REMOTE_GPIO_MAGICK) {
-            printf("Wrong message received\n");
-        }
-        if(mg->pin < 16) {
-            qemu_mutex_lock_iothread();
-			//printf("received IRQ from GUI\n");
-			//printf("gpio %d, pin %d, state %d\n",mg->gpio,mg->pin, mg->state);
-			STM32F3XXGPIOState *gpio = &(dev->gpio[mg->gpio]);
-			//send IRQ to SYSCFG -> EXTI.
-			qemu_irq irq = qdev_get_gpio_in(DEVICE(&(dev->syscfg)),mg->pin+mg->gpio*16);	
-			qemu_set_irq(irq, mg->state);
-			if(mg->state) {
-				gpio->GPIOx_IDR |= 1 << mg->pin;
-			} else {
-				gpio->GPIOx_IDR &= ~(1 << mg->pin);
+        if((int) msgGpio->magick == REMOTE_GPIO_MAGICK) {
+			printf("msg from gpio: ");
+			fflush(stdout);
+
+			if(res != sizeof(gpio_in_msg)) continue;
+        	if(msgGpio->pin < 16) {
+        	    qemu_mutex_lock_iothread();
+				//printf("received IRQ from GUI\n");
+				//printf("gpio %d, pin %d, state %d\n",msgGpio->gpio,msgGpio->pin, msgGpio->state);
+				STM32F3XXGPIOState *gpio = &(dev->gpio[msgGpio->gpio]);
+				//send IRQ to SYSCFG -> EXTI.
+				qemu_irq irq = qdev_get_gpio_in(DEVICE(&(dev->syscfg)),msgGpio->pin+msgGpio->gpio*16);	
+				qemu_set_irq(irq, msgGpio->state);
+				if(msgGpio->state) {
+					gpio->GPIOx_IDR |= 1 << msgGpio->pin;
+				} else {
+					gpio->GPIOx_IDR &= ~(1 << msgGpio->pin);
+				}
+        	    //mpc8xxx_gpio_set_irq(arg,msgGpio->pin,msgGpio->state);
+        	    qemu_mutex_unlock_iothread();
+        	}
+		} else if((int) msgAdc->magick == REMOTE_ADC_MAGICK) {
+			printf("msg from adc: %d",msgAdc->value);
+			fflush(stdout);
+			if(msgAdc->id < STM_NUM_ADCS) {
+				STM32F3XXADCState *adc = &(dev->adc[msgAdc->id]);
+				adc->adc_dr = msgAdc->value;
 			}
-            //mpc8xxx_gpio_set_irq(arg,mg->pin,mg->state);
-            qemu_mutex_unlock_iothread();
+		} else {
+        	printf("Wrong message received\n");
+			fflush(stdout);
         }
     }
 }
