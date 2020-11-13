@@ -121,10 +121,13 @@ static void stm32f3xx_timer_interrupt(void *opaque)
     STM32F3XXTimerState *s = opaque;
 
     if (s->tim_dier & TIM_DIER_UIE && s->tim_cr1 & TIM_CR1_CEN) {
-        s->tim_sr |= 1;
+		//interrupt mode
         qemu_irq_pulse(s->irq);
 		DB_PRINT("it sent.\n");
-    }
+    } else {
+		//in polling mode, the status register is updated.
+        s->tim_sr |= 1;
+	}
 	if(s->tim_cr1 & TIM_CR1_OPM) { //One Pulse Mode
 		s->tim_cr1 &= ~TIM_CR1_CEN;  //stop
 		stm32f3xx_update_ptimer(s,0);
@@ -182,8 +185,8 @@ static uint64_t stm32f3xx_timer_read(void *opaque, hwaddr offset,
     //    return s->tim_smcr;
     case TIM_DIER:
         return s->tim_dier;
-    //case TIM_SR:
-    //    return s->tim_sr;
+    case TIM_SR:
+        return s->tim_sr;
     //case TIM_EGR:
     //    return s->tim_egr;
     //case TIM_CCMR1:
@@ -248,10 +251,10 @@ static void stm32f3xx_timer_write(void *opaque, hwaddr offset,
     case TIM_DIER:
         s->tim_dier = value;
         return;
-    //case TIM_SR:
-    //    /* This is set by hardware and cleared by software */
-    //    s->tim_sr &= value;
-    //    return;
+    case TIM_SR:
+        /* This is set by hardware and cleared by software */
+        s->tim_sr = value;
+        return;
     //case TIM_EGR:
     //    s->tim_egr = value;
     //    if (s->tim_egr & TIM_EGR_UG) {
