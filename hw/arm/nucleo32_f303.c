@@ -215,7 +215,7 @@ static void* remote_gpio_thread(void * arg)
 
 static void nucleo32_f303_init(MachineState *machine)
 {
-    printf("STM32F303 - Coro Lab board - version 2020-11-19-1.\n");
+    printf("STM32F303 - Coro Lab board - version 2020-11-13.\n");
 	fflush(stdout);
     STM32F303State *dev = STM32F303_SOC(qdev_new(TYPE_STM32F303_SOC));
     qdev_prop_set_string((DeviceState*)dev, "cpu-type", ARM_CPU_TYPE_NAME("cortex-m4"));
