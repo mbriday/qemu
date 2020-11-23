@@ -35,8 +35,9 @@
 #include "ui/console.h"
 #include "qemu/main-loop.h"
 
-#define REMOTE_GPIO_MAGICK 0xDEADBEEF
-#define REMOTE_ADC_MAGICK  0xCAFECAFE
+#define REMOTE_GPIO_MAGICK   0xDEADBEEF
+#define REMOTE_ADC_MAGICK    0xCAFECAFE
+#define REMOTE_SERIAL_MAGICK 0xABCDEF01
 
 
 /* message queue, thread and mutex to communicate with GUI */
@@ -51,6 +52,11 @@ typedef struct {
       uint16_t output;      /* new output value    */
 	  uint16_t gpio;		    /* 0 GPIOA, 1 GPIOB, … */
 } gpio_out_msg;
+
+typedef struct {
+      uint32_t magick;
+      uint32_t c;			/* character */
+} uart_out_msg;
 
 typedef struct {
       uint32_t magick;
@@ -86,10 +92,81 @@ static void gpio_out_update_handler(void *opaque, int n, int changed_out) {
 	msg.gpio        = gpio->id; /* TODO update */
 	/* send new value */
 	mq_send(mq,(const char *)&msg,sizeof(msg),0);
-	printf("*");
-	fflush(stdout);
+	qemu_mutex_unlock(&dat_lock);
+	//printf("*");
+	//fflush(stdout);
+
+	//special case: ultra-sound SRF on PA10 
+	if(msg.gpio == 0 && msg.dir_mask & (1<<10) && msg.output & (1<<10) && msg.changed_out & (1<<10)) {
+		printf("SRF05 Trigger");
+		fflush(stdout);
+		ptimer_state *timer = gpio->srf05.timerLatency;
+		ptimer_transaction_begin(timer);
+		ptimer_set_freq(timer,1000); //1Khz
+        ptimer_set_count(timer, 20);
+        //ptimer_set_limit(timer, 20, 0); //20 ms
+		ptimer_run(timer,true); //oneshot
+		ptimer_transaction_commit(timer);
+		
+	}
+}
+
+static void uart_out_update_handler(void *opaque, int n, int changed_out) {
+	STM32F3XXDUMMY_UARTState *uart= (STM32F3XXDUMMY_UARTState *)opaque;
+	//printf("%c",(char)uart->dummy_uart_tdr);
+	//fflush(stdout);
+
+	qemu_mutex_lock(&dat_lock);
+	uart_out_msg msg; /* msg to interact without external tool */
+	msg.magick = REMOTE_SERIAL_MAGICK;
+	msg.c      = (uint16_t)uart->dummy_uart_tdr;
+	/* send new value */
+	mq_send(mq,(const char *)&msg,sizeof(msg),0);
 	qemu_mutex_unlock(&dat_lock);
 }
+
+static void updateGPIOFromOutside(STM32F303State *dev, uint32_t port, uint32_t pin, uint32_t state)
+{
+	//printf("received IRQ from GUI\n");
+	//printf("gpio %d, pin %d, state %d\n",gpio,pin, state);
+	STM32F3XXGPIOState *gpio = &(dev->gpio[port]);
+	//send IRQ to SYSCFG -> EXTI.
+	qemu_irq irq = qdev_get_gpio_in(DEVICE(&(dev->syscfg)),pin+port*16);	
+	qemu_set_irq(irq, state);
+	if(state) {
+		gpio->GPIOx_IDR |= 1 << pin;
+	} else {
+		gpio->GPIOx_IDR &= ~(1 << pin);
+	}
+}
+
+static void srf05_interrupt_lat(void *opaque)
+{
+    STM32F303State *dev = opaque;
+	STM32F3XXGPIOState *gpio = &(dev->gpio[0]); //port A
+	//dev->srf05;
+    printf("Timer US pulse starts..");
+	fflush(stdout);
+	updateGPIOFromOutside(dev,0,10,1); //set PA10.
+	ptimer_state *timer = gpio->srf05.timerDistance;
+	ptimer_transaction_begin(timer);
+	ptimer_set_freq(timer,1000000); //1Mhz
+	const int dist = 58*110; //58us/cm * 110 cm.
+    ptimer_set_count(timer, dist);
+    //ptimer_set_limit(timer, 20, 0); //20 ms
+	ptimer_run(timer,true); //oneshot
+	ptimer_transaction_commit(timer);
+}
+
+static void srf05_interrupt_measure(void *opaque)
+{
+    STM32F303State *dev = opaque;
+	//dev->srf05;
+    printf("done.\n");
+	fflush(stdout);
+	updateGPIOFromOutside(dev,0,10,0); //reset PA10.
+}
+
 
 /* thread that listens messages from the Gui */
 static void* remote_gpio_thread(void * arg)
@@ -117,20 +194,9 @@ static void* remote_gpio_thread(void * arg)
 
 			if(res != sizeof(gpio_in_msg)) continue;
         	if(msgGpio->pin < 16) {
-        	    qemu_mutex_lock_iothread();
-				//printf("received IRQ from GUI\n");
-				//printf("gpio %d, pin %d, state %d\n",msgGpio->gpio,msgGpio->pin, msgGpio->state);
-				STM32F3XXGPIOState *gpio = &(dev->gpio[msgGpio->gpio]);
-				//send IRQ to SYSCFG -> EXTI.
-				qemu_irq irq = qdev_get_gpio_in(DEVICE(&(dev->syscfg)),msgGpio->pin+msgGpio->gpio*16);	
-				qemu_set_irq(irq, msgGpio->state);
-				if(msgGpio->state) {
-					gpio->GPIOx_IDR |= 1 << msgGpio->pin;
-				} else {
-					gpio->GPIOx_IDR &= ~(1 << msgGpio->pin);
-				}
-        	    //mpc8xxx_gpio_set_irq(arg,msgGpio->pin,msgGpio->state);
-        	    qemu_mutex_unlock_iothread();
+				qemu_mutex_lock_iothread();
+				updateGPIOFromOutside(dev,msgGpio->gpio, msgGpio->pin, msgGpio->state);
+				qemu_mutex_unlock_iothread();
         	}
 		} else if((int) msgAdc->magick == REMOTE_ADC_MAGICK) {
 			printf("msg from adc: %d",msgAdc->value);
@@ -146,8 +212,11 @@ static void* remote_gpio_thread(void * arg)
     }
 }
 
+
 static void nucleo32_f303_init(MachineState *machine)
 {
+    printf("STM32F303 - Coro Lab board - version 2020-11-19-1.\n");
+	fflush(stdout);
     STM32F303State *dev = STM32F303_SOC(qdev_new(TYPE_STM32F303_SOC));
     qdev_prop_set_string((DeviceState*)dev, "cpu-type", ARM_CPU_TYPE_NAME("cortex-m4"));
     sysbus_realize_and_unref(SYS_BUS_DEVICE((DeviceState *)dev), &error_fatal);
@@ -166,9 +235,26 @@ static void nucleo32_f303_init(MachineState *machine)
 	for(int i=0;i<STM_NUM_GPIOS;i++)
 	{
 		DeviceState *gpio = DEVICE(&(dev->gpio[i]));
+		STM32F3XXGPIOState *gpioState = (STM32F3XXGPIOState *)(&(dev->gpio[i]));
+		if(i == 0) { //GPIOA
+			gpioState->srf05.timerLatency  = ptimer_init(srf05_interrupt_lat,dev,PTIMER_POLICY_DEFAULT);
+			gpioState->srf05.timerDistance = ptimer_init(srf05_interrupt_measure,dev,PTIMER_POLICY_DEFAULT);
+		} else {
+			gpioState->srf05.timerLatency  = NULL;
+			gpioState->srf05.timerDistance = NULL;
+		}
 		assert(gpio);
 		qemu_irq *gpio_irq = qemu_allocate_irqs(gpio_out_update_handler, gpio, 1);
 		qdev_connect_gpio_out(gpio, 0, gpio_irq[0]);
+	}
+
+	/* connect each uart to the handler for communication with external tools (gui) */
+	for(int i=0;i<STM_NUM_UARTS;i++)
+	{
+		DeviceState *uart = DEVICE(&(dev->uart[i]));
+		assert(uart);
+		qemu_irq *uart_irq = qemu_allocate_irqs(uart_out_update_handler, uart, 1);
+		qdev_connect_gpio_out(uart, 0, uart_irq[0]);
 	}
 
 }

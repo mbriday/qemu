@@ -26,6 +26,7 @@
 
 #include "hw/sysbus.h"
 #include <mqueue.h>
+#include "hw/ptimer.h"
 
 #define TYPE_STM32F3XX_GPIO "stm32f3xx.gpio"
 #define STM32F3XX_GPIO(obj) OBJECT_CHECK(STM32F3XXGPIOState, (obj),TYPE_STM32F3XX_GPIO)
@@ -47,6 +48,10 @@
 
 #define STM32F3XX_GPIO_PIN_COUNT 16
 
+typedef struct {
+    ptimer_state *timerLatency;
+    ptimer_state *timerDistance;
+} USSensor;
 
 typedef struct STM32F3XXGPIOState {
     /*< private >*/
@@ -71,6 +76,8 @@ typedef struct STM32F3XXGPIOState {
     qemu_irq in_irq[STM32F3XX_GPIO_PIN_COUNT];
 	/* GPIO id: 0 is GPIOA, 1i is GPIOB, .. */
 	int id;
+	//special case for Coro labs
+	USSensor srf05;
 
 } STM32F3XXGPIOState;
 

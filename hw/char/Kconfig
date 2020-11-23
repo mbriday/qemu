@@ -35,6 +35,9 @@ config VIRTIO_SERIAL
     default y
     depends on VIRTIO
 
+config STM32F3XX_DUMMY_UART
+    bool
+
 config STM32F2XX_USART
     bool
 

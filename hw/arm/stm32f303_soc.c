@@ -33,9 +33,9 @@
 #include "hw/misc/unimp.h"
 
 #define SYSCFG_ADD                     0x40010000 /*updated*/
-static const uint32_t usart_addr[] = { 0x40011000, 0x40004400, 0x40004800,
-                                       0x40004C00, 0x40005000, 0x40011400,
-                                       0x40007800, 0x40007C00 };
+//static const uint32_t usart_addr[] = { 0x40011000, 0x40004400, 0x40004800,
+//                                       0x40004C00, 0x40005000, 0x40011400,
+//                                       0x40007800, 0x40007C00 };
 /* At the moment only Timer 2 to 7 are modelled (timer 5 does not exists, but memory map is free) */
 static const uint32_t timer_addr[] = { 0x40000000, 0x40000400,
                                        0x40000800, 0x40000C00,
@@ -47,9 +47,10 @@ static const uint32_t spi_addr[] =   { 0x40013000, 0x40003800, 0x40003C00,
 #define RCC_ADDR                      0x40021000
 /* GPIOA,B,C,D and F (no GPIOE) */
 static const uint32_t gpio_addr[] =  { 0x48000000, 0x48000400,0x48000800,0x48000C00,0x48001400};
+static const uint32_t uart_addr[] =  { 0x40004400};
 
 #define SYSCFG_IRQ               71
-static const int usart_irq[] = { 37, 38, 39, 52, 53, 71, 82, 83 };
+//static const int usart_irq[] = { 37, 38, 39, 52, 53, 71, 82, 83 };
 static const int timer_irq[] = { 28, 29, 30, 50, 54, 55};
 #define ADC_IRQ 18
 static const int spi_irq[] =   { 35, 36, 51, 0, 0, 0 };
@@ -66,10 +67,10 @@ static void stm32f303_soc_initfn(Object *obj)
 
     object_initialize_child(obj, "syscfg", &s->syscfg, TYPE_STM32F4XX_SYSCFG);
 
-    for (i = 0; i < STM_NUM_USARTS; i++) {
-        object_initialize_child(obj, "usart[*]", &s->usart[i],
-                                TYPE_STM32F2XX_USART);
-    }
+    //for (i = 0; i < STM_NUM_USARTS; i++) {
+    //    object_initialize_child(obj, "usart[*]", &s->usart[i],
+    //                            TYPE_STM32F2XX_USART);
+    //}
 
     for (i = 0; i < STM_NUM_TIMERS; i++) {
         object_initialize_child(obj, "timer[*]", &s->timer[i],
@@ -86,6 +87,10 @@ static void stm32f303_soc_initfn(Object *obj)
 
     for (i = 0; i < STM_NUM_GPIOS; i++) {
         object_initialize_child(obj, "gpio[*]", &s->gpio[i], TYPE_STM32F3XX_GPIO);
+    }
+
+    for (i = 0; i < STM_NUM_UARTS; i++) {
+        object_initialize_child(obj, "uart[*]", &s->uart[i], TYPE_STM32F3XX_DUMMY_UART);
     }
 
     object_initialize_child(obj, "exti", &s->exti, TYPE_STM32F4XX_EXTI);
@@ -145,19 +150,19 @@ static void stm32f303_soc_realize(DeviceState *dev_soc, Error **errp)
     sysbus_mmio_map(busdev, 0, SYSCFG_ADD);
     sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(armv7m, SYSCFG_IRQ));
 
-    /* Attach UART (uses USART registers) and USART controllers */
-    for (i = 0; i < STM_NUM_USARTS; i++) {
-        dev = DEVICE(&(s->usart[i]));
-        qdev_prop_set_chr(dev, "chardev", serial_hd(i));
-        sysbus_realize(SYS_BUS_DEVICE(&s->usart[i]), &err);
-        if (err != NULL) {
-            error_propagate(errp, err);
-            return;
-        }
-        busdev = SYS_BUS_DEVICE(dev);
-        sysbus_mmio_map(busdev, 0, usart_addr[i]);
-        sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(armv7m, usart_irq[i]));
-    }
+    ///* Attach UART (uses USART registers) and USART controllers */
+    //for (i = 0; i < STM_NUM_USARTS; i++) {
+    //    dev = DEVICE(&(s->usart[i]));
+    //    qdev_prop_set_chr(dev, "chardev", serial_hd(i));
+    //    sysbus_realize(SYS_BUS_DEVICE(&s->usart[i]), &err);
+    //    if (err != NULL) {
+    //        error_propagate(errp, err);
+    //        return;
+    //    }
+    //    busdev = SYS_BUS_DEVICE(dev);
+    //    sysbus_mmio_map(busdev, 0, usart_addr[i]);
+    //    sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(armv7m, usart_irq[i]));
+    //}
 
     /* Timer 2 to 7 */
     for (i = 0; i < STM_NUM_TIMERS; i++) {
@@ -228,6 +233,17 @@ static void stm32f303_soc_realize(DeviceState *dev_soc, Error **errp)
         busdev = SYS_BUS_DEVICE(dev);
         sysbus_mmio_map(busdev, 0, gpio_addr[i]);
 		s->gpio[i].id = i;
+    }
+    /* UART devices */
+    for (i = 0; i < STM_NUM_UARTS; i++) {
+        dev = DEVICE(&(s->uart[i]));
+        sysbus_realize(SYS_BUS_DEVICE(&s->uart[i]), &err);
+        if (err != NULL) {
+            error_propagate(errp, err);
+            return;
+        }
+        busdev = SYS_BUS_DEVICE(dev);
+        sysbus_mmio_map(busdev, 0, uart_addr[i]);
     }
 
     /* EXTI device */

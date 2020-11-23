@@ -51,18 +51,18 @@ static uint64_t stm32f3xx_adc_read(void *opaque, hwaddr addr,
                                    unsigned int size) {
   STM32F3XXADCState *s = opaque;
 
-  DB_PRINT("Address: 0x%" HWADDR_PRIx "\n", addr);
-  printf("ADC Address: 0x%" HWADDR_PRIx "\n", addr);
-  fflush(stdout);
+  //DB_PRINT("Address: 0x%" HWADDR_PRIx "\n", addr);
+  //printf("ADC Address: 0x%" HWADDR_PRIx "\n", addr);
+  //fflush(stdout);
 
   switch (addr) {
   case ADC_ISR:
-	printf("read ADC ISR");
-	fflush(stdout);
+	//printf("read ADC ISR");
+	//fflush(stdout);
     return 1 << 2 | 1 << 0; // bit2 is EOC, bit 0 is ADRDY
   case ADC_DR:
-	printf("read ADC DR");
-	fflush(stdout);
+	//printf("read ADC DR");
+	//fflush(stdout);
     return s->adc_dr;
   default:
     break;

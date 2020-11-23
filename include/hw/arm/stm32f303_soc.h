@@ -33,6 +33,7 @@
 #include "hw/adc/stm32f3xx_adc.h"
 #include "hw/misc/stm32f4xx_exti.h"
 #include "hw/gpio/stm32f3xx_gpio.h"
+#include "hw/char/stm32f3xx_dummy_uart.h"
 #include "hw/misc/stm32f3xx_rcc.h"
 #include "hw/or-irq.h"
 #include "hw/ssi/stm32f2xx_spi.h"
@@ -42,16 +43,18 @@
 #define STM32F303_SOC(obj) \
     OBJECT_CHECK(STM32F303State, (obj), TYPE_STM32F303_SOC)
 
-#define STM_NUM_USARTS 7
+//#define STM_NUM_USARTS 7
 #define STM_NUM_TIMERS 6
 #define STM_NUM_ADCS   2
 #define STM_NUM_SPIS   6
 #define STM_NUM_GPIOS  5
+#define STM_NUM_UARTS  1
 
 #define FLASH_BASE_ADDRESS 0x08000000 
 #define FLASH_SIZE (1024 * 1024)     /* in fact 64k */
 #define SRAM_BASE_ADDRESS 0x20000000
 #define SRAM_SIZE (192 * 1024)       /* in fact 12K */
+
 
 typedef struct STM32F303State {
     /*< private >*/
@@ -64,12 +67,13 @@ typedef struct STM32F303State {
 
     STM32F4xxSyscfgState syscfg;
     STM32F4xxExtiState exti;
-    STM32F2XXUsartState usart[STM_NUM_USARTS];
+    //STM32F2XXUsartState usart[STM_NUM_USARTS];
     STM32F3XXTimerState timer[STM_NUM_TIMERS];
     qemu_or_irq adc_irqs;
     STM32F3XXADCState adc[STM_NUM_ADCS];
     STM32F2XXSPIState spi[STM_NUM_SPIS];
     STM32F3XXGPIOState gpio[STM_NUM_GPIOS];
+    STM32F3XXDUMMY_UARTState uart[STM_NUM_UARTS];
     STM32F3XXRCCState rcc;
 
     MemoryRegion sram;
