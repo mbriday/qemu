@@ -41,8 +41,7 @@ static const uint32_t timer_addr[] = { 0x40000000, 0x40000400,
                                        0x40000800, 0x40000C00,
                                        0x40001000, 0x40001400 };
 static const uint32_t adc_addr[] = { 0x50000000, 0x50000100};
-static const uint32_t spi_addr[] =   { 0x40013000, 0x40003800, 0x40003C00,
-                                       0x40013400, 0x40015000, 0x40015400 };
+static const uint32_t spi_addr[] =   { 0x40013000 };  /* only SPI1 */
 #define EXTI_ADDR                      0x40010400 /*updated */
 #define RCC_ADDR                      0x40021000
 /* GPIOA,B,C,D and F (no GPIOE) */
@@ -82,7 +81,7 @@ static void stm32f303_soc_initfn(Object *obj)
     }
 
     for (i = 0; i < STM_NUM_SPIS; i++) {
-        object_initialize_child(obj, "spi[*]", &s->spi[i], TYPE_STM32F2XX_SPI);
+        object_initialize_child(obj, "spi[*]", &s->spi[i], TYPE_STM32F3XX_SPI);
     }
 
     for (i = 0; i < STM_NUM_GPIOS; i++) {

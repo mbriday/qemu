@@ -38,7 +38,8 @@
 #define REMOTE_GPIO_MAGICK   0xDEADBEEF
 #define REMOTE_ADC_MAGICK    0xCAFECAFE
 #define REMOTE_SERIAL_MAGICK 0xABCDEF01
-
+#define REMOTE_MCP_MAGICK    0xFEEDFEED
+#define REMOTE_RESET_MAGICK  0xBADF00D
 
 /* message queue, thread and mutex to communicate with GUI */
 mqd_t mq;
@@ -71,6 +72,14 @@ typedef struct {
       uint32_t value;   /* 0 to 4095 */
 } adc_in_msg;
 
+/* structure to get access to the full dev
+ * when updating a gpio out
+ */
+typedef struct {
+	STM32F303State *dev;
+	STM32F3XXGPIOState *gpio;
+} GPIODevAccess;
+
 /* this handler is called:
  * * if at least one pin is updated changed_out is a mask of pins in 
  * output mode that toggled see GPIOx_ODR to get the new values.
@@ -78,7 +87,8 @@ typedef struct {
  * * at startup
  **/
 static void gpio_out_update_handler(void *opaque, int n, int changed_out) {
-	STM32F3XXGPIOState *gpio= (STM32F3XXGPIOState *)opaque;
+	STM32F3XXGPIOState *gpio= ((GPIODevAccess *)opaque)->gpio;
+	STM32F303State	    *dev= ((GPIODevAccess *)opaque)->dev;
 
 	/* There should only be one IRQ */
 	assert(n == 0);
@@ -109,6 +119,28 @@ static void gpio_out_update_handler(void *opaque, int n, int changed_out) {
 		ptimer_transaction_commit(timer);
 		
 	}
+	//special case for MCP CS on PA11:
+	if(msg.gpio == 0 && msg.dir_mask & (1<<11) && msg.changed_out & (1<<11)) {
+		stm32f3xx_spi_updateCS(&(dev->spi[0]),msg.output & (1<<11));
+	}
+}
+
+static void spi_mcp_update_handler(void *opaque, int n, int changed_out) {
+	STM32F303State *dev = (STM32F303State *)opaque;
+	MCP23S17State *mcp = &(dev->spi[0].mcp);
+	/* There should only be one IRQ */
+	assert(n == 0);
+	//GPIOA
+	qemu_mutex_lock(&dat_lock);
+	gpio_out_msg msg; /* msg to interact without external tool */
+	msg.magick = REMOTE_MCP_MAGICK;
+	msg.changed_out = changed_out; //unused
+	msg.dir_mask    = ~(mcp->regs[MCP32S17_IODIRA]) & 0xFF; //0 means output…
+	msg.output      = mcp->regs[MCP32S17_OLATA] ^ mcp->regs[MCP32S17_IOPOLA] ;
+	msg.gpio        = 0;
+	/* send new value */
+	mq_send(mq,(const char *)&msg,sizeof(msg),0);
+	qemu_mutex_unlock(&dat_lock);
 }
 
 static void uart_out_update_handler(void *opaque, int n, int changed_out) {
@@ -123,6 +155,19 @@ static void uart_out_update_handler(void *opaque, int n, int changed_out) {
 	/* send new value */
 	mq_send(mq,(const char *)&msg,sizeof(msg),0);
 	qemu_mutex_unlock(&dat_lock);
+}
+
+static void updateMCPFromOutside(STM32F303State *dev, uint32_t pin, uint32_t state)
+{
+	MCP23S17State *mcp = &(dev->spi[0].mcp);
+	uint32_t prev = mcp->regs[MCP32S17_GPIOB];
+	if(state) {
+		mcp->regs[MCP32S17_GPIOB] |= 1 << pin;
+	} else {
+		mcp->regs[MCP32S17_GPIOB] &= ~(1 << pin);
+	}
+	printf("update GPIOB %x -> %x\n",prev,mcp->regs[MCP32S17_GPIOB]);
+
 }
 
 static void updateGPIOFromOutside(STM32F303State *dev, uint32_t port, uint32_t pin, uint32_t state)
@@ -205,6 +250,15 @@ static void* remote_gpio_thread(void * arg)
 				STM32F3XXADCState *adc = &(dev->adc[msgAdc->id]);
 				adc->adc_dr = msgAdc->value;
 			}
+		} else if((int) msgGpio->magick == REMOTE_MCP_MAGICK) {
+			printf("msg from mcp: %d",msgGpio->pin);
+			fflush(stdout);
+			if(res != sizeof(gpio_in_msg)) continue;
+        	if(msgGpio->pin < 16 && msgGpio->gpio == 1) {
+				qemu_mutex_lock_iothread();
+				updateMCPFromOutside(dev, msgGpio->pin, msgGpio->state);
+				qemu_mutex_unlock_iothread();
+        	}
 		} else {
         	printf("Wrong message received\n");
 			fflush(stdout);
@@ -236,6 +290,10 @@ static void nucleo32_f303_init(MachineState *machine)
 	{
 		DeviceState *gpio = DEVICE(&(dev->gpio[i]));
 		STM32F3XXGPIOState *gpioState = (STM32F3XXGPIOState *)(&(dev->gpio[i]));
+		GPIODevAccess *gpioda = malloc(sizeof(GPIODevAccess));
+		gpioda->dev  = dev;
+		gpioda->gpio = gpioState;
+
 		if(i == 0) { //GPIOA
 			gpioState->srf05.timerLatency  = ptimer_init(srf05_interrupt_lat,dev,PTIMER_POLICY_DEFAULT);
 			gpioState->srf05.timerDistance = ptimer_init(srf05_interrupt_measure,dev,PTIMER_POLICY_DEFAULT);
@@ -244,10 +302,16 @@ static void nucleo32_f303_init(MachineState *machine)
 			gpioState->srf05.timerDistance = NULL;
 		}
 		assert(gpio);
-		qemu_irq *gpio_irq = qemu_allocate_irqs(gpio_out_update_handler, gpio, 1);
+		
+		qemu_irq *gpio_irq = qemu_allocate_irqs(gpio_out_update_handler, gpioda, 1);
 		qdev_connect_gpio_out(gpio, 0, gpio_irq[0]);
 	}
 
+	for(int i=0;i<STM_NUM_SPIS;i++)
+	{
+		qemu_irq *spi_irq = qemu_allocate_irqs(spi_mcp_update_handler, dev, 1);
+		qdev_connect_gpio_out(DEVICE(dev->spi), 0, spi_irq[0]);
+	}
 	/* connect each uart to the handler for communication with external tools (gui) */
 	for(int i=0;i<STM_NUM_UARTS;i++)
 	{
@@ -257,6 +321,9 @@ static void nucleo32_f303_init(MachineState *machine)
 		qdev_connect_gpio_out(uart, 0, uart_irq[0]);
 	}
 
+	/* send a 'reset' message so that GUI can be reinitialized */
+	int val = REMOTE_RESET_MAGICK;
+	mq_send(mq,(const char *)&val,sizeof(int),0);
 }
 
 static void nucleo32_f303_machine_init(MachineClass *mc)

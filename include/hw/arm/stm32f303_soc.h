@@ -36,7 +36,7 @@
 #include "hw/char/stm32f3xx_dummy_uart.h"
 #include "hw/misc/stm32f3xx_rcc.h"
 #include "hw/or-irq.h"
-#include "hw/ssi/stm32f2xx_spi.h"
+#include "hw/ssi/stm32f3xx_spi_mcp27S17.h"
 #include "hw/arm/armv7m.h"
 
 #define TYPE_STM32F303_SOC "stm32f303-soc"
@@ -46,7 +46,7 @@
 //#define STM_NUM_USARTS 7
 #define STM_NUM_TIMERS 6
 #define STM_NUM_ADCS   2
-#define STM_NUM_SPIS   6
+#define STM_NUM_SPIS   1
 #define STM_NUM_GPIOS  5
 #define STM_NUM_UARTS  1
 
@@ -71,7 +71,7 @@ typedef struct STM32F303State {
     STM32F3XXTimerState timer[STM_NUM_TIMERS];
     qemu_or_irq adc_irqs;
     STM32F3XXADCState adc[STM_NUM_ADCS];
-    STM32F2XXSPIState spi[STM_NUM_SPIS];
+    STM32F3XXSPIState spi[STM_NUM_SPIS];
     STM32F3XXGPIOState gpio[STM_NUM_GPIOS];
     STM32F3XXDUMMY_UARTState uart[STM_NUM_UARTS];
     STM32F3XXRCCState rcc;

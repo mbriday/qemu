@@ -340,6 +340,7 @@ config STM32F303_SOC
     select STM32F3XX_TIMER
     select STM32F3XX_ADC
     select STM32F3XX_DUMMY_UART
+    select STM32F3XX_SPI
 
 config STM32F405_SOC
     bool
