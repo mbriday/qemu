@@ -166,7 +166,7 @@ static void updateMCPFromOutside(STM32F303State *dev, uint32_t pin, uint32_t sta
 	} else {
 		mcp->regs[MCP32S17_GPIOB] &= ~(1 << pin);
 	}
-	printf("update GPIOB %x -> %x\n",prev,mcp->regs[MCP32S17_GPIOB]);
+	//printf("update GPIOB %x -> %x\n",prev,mcp->regs[MCP32S17_GPIOB]);
 
 }
 
@@ -234,8 +234,8 @@ static void* remote_gpio_thread(void * arg)
             exit(1);
         }
         if((int) msgGpio->magick == REMOTE_GPIO_MAGICK) {
-			printf("msg from gpio: ");
-			fflush(stdout);
+			//printf("msg from gpio: ");
+			//fflush(stdout);
 
 			if(res != sizeof(gpio_in_msg)) continue;
         	if(msgGpio->pin < 16) {
@@ -244,14 +244,14 @@ static void* remote_gpio_thread(void * arg)
 				qemu_mutex_unlock_iothread();
         	}
 		} else if((int) msgAdc->magick == REMOTE_ADC_MAGICK) {
-			printf("msg from adc: %d",msgAdc->value);
+			//printf("msg from adc: %d",msgAdc->value);
 			fflush(stdout);
 			if(msgAdc->id < STM_NUM_ADCS) {
 				STM32F3XXADCState *adc = &(dev->adc[msgAdc->id]);
 				adc->adc_dr = msgAdc->value;
 			}
 		} else if((int) msgGpio->magick == REMOTE_MCP_MAGICK) {
-			printf("msg from mcp: %d",msgGpio->pin);
+			//printf("msg from mcp: %d",msgGpio->pin);
 			fflush(stdout);
 			if(res != sizeof(gpio_in_msg)) continue;
         	if(msgGpio->pin < 16 && msgGpio->gpio == 1) {
@@ -269,7 +269,7 @@ static void* remote_gpio_thread(void * arg)
 
 static void nucleo32_f303_init(MachineState *machine)
 {
-    printf("STM32F303 - Coro Lab board - version 2020-11-27.\n");
+    printf("STM32F303 - Coro Lab board - version 2020-11-28.\n");
 	fflush(stdout);
     STM32F303State *dev = STM32F303_SOC(qdev_new(TYPE_STM32F303_SOC));
     qdev_prop_set_string((DeviceState*)dev, "cpu-type", ARM_CPU_TYPE_NAME("cortex-m4"));
