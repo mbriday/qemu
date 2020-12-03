@@ -43,6 +43,38 @@
 
 #define SPI_DEBUG
 
+uint8_t mcp23s17_interruptMgmt(MCP23S17State *mcp, uint32_t pin, uint32_t state)
+{
+	//check arg
+	if(pin > 7) return 0;
+	uint8_t result = 0; //interrupt?
+	//interrupt enable?
+	//printf("check it\n");
+	const int mask = 1 << pin;
+	if(mcp->regs[MCP32S17_GPINTENB] & mask)
+	{
+		//printf("ok, enabled\n");
+		uint8_t intcon = mcp->regs[MCP32S17_INTCONB];
+		if(intcon & mask) {
+			printf("Warning: interrupt on level not fully implemented!! \n");
+			//compare with DEFVAL
+			uint8_t defval = mcp->regs[MCP32S17_DEFVALB];
+			if(((defval >> pin) & 1) != state) result = 1;
+		} else {
+			//printf("it on change\n");
+			//interrupt on change
+			result = 1;
+		}
+	} 
+	//is there an interrupt?
+	if(result)
+	{
+		mcp->regs[MCP32S17_INTFB] |= mask;
+		mcp->regs[MCP32S17_INTCAPB] = mcp->regs[MCP32S17_GPIOB]; 
+	}
+	return result;
+}
+
 static uint8_t read_mcp23s17(STM32F3XXSPIState *dev, uint32_t addr)
 {
 	MCP23S17State *mcp = &(dev->mcp);
@@ -63,14 +95,17 @@ static uint8_t read_mcp23s17(STM32F3XXSPIState *dev, uint32_t addr)
 		case MCP32S17_INTCONB :
 		case MCP32S17_IOCON   :
 		case MCP32S17_GPPUA   :
-		case MCP32S17_GPPUB   :
-		case MCP32S17_INTFA   :
-		case MCP32S17_INTFB   :
-		case MCP32S17_INTCAPA :
-		case MCP32S17_INTCAPB :
-		case MCP32S17_GPIOA   :
+		case MCP32S17_GPPUB   : 
 			break;
+		case MCP32S17_INTFA   : mcp->regs[MCP32S17_INTFA] = 0; break; //erase on read
+		case MCP32S17_INTFB   : mcp->regs[MCP32S17_INTFB] = 0; break; //erase on read
+		case MCP32S17_INTCAPA : mcp->regs[MCP32S17_INTCAPA] = 0; break; //erase on read
+		case MCP32S17_INTCAPB : mcp->regs[MCP32S17_INTCAPB] = 0; break; //erase on read
+		case MCP32S17_GPIOA   : //read on GPIOx erase INTCAPx state.
+			mcp->regs[MCP32S17_INTCAPA] = 0; 
+			break; 
 		case MCP32S17_GPIOB   :
+			mcp->regs[MCP32S17_INTCAPB] = 0; 
 			//special case for GPIOB =>
 			//4 DIP switch 0-3: GPIOB & DIR & pullup
 			//4 push buttons 4-7 (pullup required): GPIOB & DIR & PU
@@ -122,17 +157,15 @@ static void write_mcp23s17(STM32F3XXSPIState *dev, uint32_t addr, uint32_t newVa
 		case MCP32S17_IOCON   :
 			if(newValue & 0x80) printf("error: only one bank address mode implemented!\n");
 			if(newValue & 0x40) printf("error: mirror mode not implemented!\n");
-			if(newValue & 0x02) printf("error: intpol not implemented!\n");
+			if(newValue & 0x04) printf("error: ODR not implemented! => no opendrain interrupt\n");
 			mcp->regs[addr] = newValue & 0x7E; //remove bit 7 and bit 0
 			break;
 		case MCP32S17_GPPUA   : mcp->regs[addr] = newValue;   //TODO
 			break;
 		case MCP32S17_GPPUB   : mcp->regs[addr] = newValue;   //TODO
 			break;
-		case MCP32S17_INTFA   : mcp->regs[addr] = newValue;   //TODO
-			break;
-		case MCP32S17_INTFB   : mcp->regs[addr] = newValue;   //TODO
-			break;
+		case MCP32S17_INTFA   : break; //RO register
+		case MCP32S17_INTFB   : break; //RO register
 		case MCP32S17_INTCAPA : mcp->regs[addr] = newValue;   //TODO
 			break;
 		case MCP32S17_INTCAPB : mcp->regs[addr] = newValue;   //TODO
@@ -232,6 +265,8 @@ static void stm32f3xx_spi_reset(DeviceState *dev)
     s->spi_crcpr = 0x00000007;
     s->spi_rxcrcr = 0x00000000;
     s->spi_txcrcr = 0x00000000;
+
+	for(int i=0;i<22;i++) s->mcp.regs[i] = 0;
 }
 
 /* entry point for a transaction on DR. called when there is a write */

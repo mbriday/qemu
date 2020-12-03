@@ -159,8 +159,9 @@ static void uart_out_update_handler(void *opaque, int n, int changed_out) {
 
 static void updateMCPFromOutside(STM32F303State *dev, uint32_t pin, uint32_t state)
 {
+	//printf("received IRQ MCP from GUI %d\n",pin);
 	MCP23S17State *mcp = &(dev->spi[0].mcp);
-	uint32_t prev = mcp->regs[MCP32S17_GPIOB];
+	//uint32_t prev = mcp->regs[MCP32S17_GPIOB];
 	if(state) {
 		mcp->regs[MCP32S17_GPIOB] |= 1 << pin;
 	} else {
@@ -168,6 +169,18 @@ static void updateMCPFromOutside(STM32F303State *dev, uint32_t pin, uint32_t sta
 	}
 	//printf("update GPIOB %x -> %x\n",prev,mcp->regs[MCP32S17_GPIOB]);
 
+	uint8_t it = mcp23s17_interruptMgmt(mcp,pin,state);
+	if(it)
+	{
+		//send IRQ to SYSCFG -> EXTI.
+		//MCP23S17 GPIOB associated to PA9
+		const int gpioPin  = 9;
+		const int gpioPort = 0;
+		qemu_irq irq = qdev_get_gpio_in(DEVICE(&(dev->syscfg)),gpioPin+gpioPort*16);	
+		//IRQ is a falling edge if IOCON.INTPOL = 0, else a rising edge.
+		//INTPOL is bit 1
+		qemu_set_irq(irq, (mcp->regs[MCP32S17_IOCON] >> 1) & 1); 
+	}
 }
 
 static void updateGPIOFromOutside(STM32F303State *dev, uint32_t port, uint32_t pin, uint32_t state)
@@ -245,14 +258,14 @@ static void* remote_gpio_thread(void * arg)
         	}
 		} else if((int) msgAdc->magick == REMOTE_ADC_MAGICK) {
 			//printf("msg from adc: %d",msgAdc->value);
-			fflush(stdout);
+			//fflush(stdout);
 			if(msgAdc->id < STM_NUM_ADCS) {
 				STM32F3XXADCState *adc = &(dev->adc[msgAdc->id]);
 				adc->adc_dr = msgAdc->value;
 			}
 		} else if((int) msgGpio->magick == REMOTE_MCP_MAGICK) {
 			//printf("msg from mcp: %d",msgGpio->pin);
-			fflush(stdout);
+			//fflush(stdout);
 			if(res != sizeof(gpio_in_msg)) continue;
         	if(msgGpio->pin < 16 && msgGpio->gpio == 1) {
 				qemu_mutex_lock_iothread();
@@ -269,7 +282,7 @@ static void* remote_gpio_thread(void * arg)
 
 static void nucleo32_f303_init(MachineState *machine)
 {
-    printf("STM32F303 - Coro Lab board - version 2020-11-28.\n");
+    printf("STM32F303 - Coro Lab board - version 2020-12-03.\n");
 	fflush(stdout);
     STM32F303State *dev = STM32F303_SOC(qdev_new(TYPE_STM32F303_SOC));
     qdev_prop_set_string((DeviceState*)dev, "cpu-type", ARM_CPU_TYPE_NAME("cortex-m4"));

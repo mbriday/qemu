@@ -67,6 +67,7 @@
 #define MCP32S17_OLATA	   0x14 //output latch
 #define MCP32S17_OLATB	   0x15
 
+
 typedef struct {
 	/* spi frame FSM */
 	uint32_t frameByte; //init to 0.
@@ -96,6 +97,9 @@ typedef struct {
     qemu_irq irq;
 	MCP23S17State mcp; /* MCP23S17 chip*/
 } STM32F3XXSPIState;
+
+/** function that determine if an interrupt should be generated */
+uint8_t mcp23s17_interruptMgmt(MCP23S17State *mcp, uint32_t pin, uint32_t state);
 
 void stm32f3xx_spi_updateCS(STM32F3XXSPIState *dev,uint32_t state);
 #endif /* HW_STM32F3XX_SPI_H */

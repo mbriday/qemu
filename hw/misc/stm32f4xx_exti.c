@@ -59,6 +59,7 @@ static void stm32f4xx_exti_set_irq(void *opaque, int irq, int level)
     }
 
     if (((1 << irq) & s->exti_ftsr) && !level) {
+		printf("falling edge\n"); fflush(stdout);
         /* Falling Edge */
         qemu_irq_pulse(s->irq[irq]);
         s->exti_pr |= 1 << irq;
